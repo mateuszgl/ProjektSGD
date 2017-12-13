@@ -69,24 +69,70 @@ void draw_explosion(std::shared_ptr<SDL_Renderer> renderer, std::shared_ptr<SDL_
 	SDL_RenderCopy( renderer.get(), texture.get(), NULL, &rect );
 }
 
+void draw_game_status(std::shared_ptr<SDL_Renderer> renderer, std::shared_ptr<SDL_Texture> texture, SDL_Rect rect){
+	rect.x = window_height/2 - rect.h/2;
+	rect.y = window_width/2 - rect.w/2;
+	SDL_RenderCopy( renderer.get(), texture.get(), NULL, &rect );
+}
+
+void draw_fuel_gauge(std::shared_ptr<SDL_Renderer> renderer, double fuel, double starting_fuel, SDL_Rect rect){
+
+	int fuel_percentage = (fuel/starting_fuel)*100;
+
+	switch(fuel_percentage){
+		case 76 ... 100 : {
+			SDL_SetRenderDrawColor(renderer.get(), 0, 255, 0, 255);    		
+			break;
+			}
+
+		case 51 ... 75: {
+			SDL_SetRenderDrawColor(renderer.get(), 255, 255, 0, 255);    	
+			break;
+			}
+
+		case 25 ... 50: {
+			SDL_SetRenderDrawColor(renderer.get(), 255, 128, 0, 255);    	
+			break;
+			}
+
+		case 0 ... 24: {
+			SDL_SetRenderDrawColor(renderer.get(), 255, 0, 0, 255);    	
+			break;
+			}
+	}
+
+	rect.y = window_height - window_height * fuel_percentage / 100;
+	rect.h = window_height - rect.y;
+
+	SDL_RenderFillRect( renderer.get(), &rect);
+	
+	SDL_SetRenderDrawColor(renderer.get(), 0, 0, 0, 255);
+
+}
+
 bool detect_collision_with_wall(SDL_Rect wall, double x, double y){
-	return ((x+rocket_width > wall.x) 
-	&& (x < wall.x + wall.w) 
-	&& (y + rocket_height > wall.y)
-	&& (y < wall.y + wall.h));
+	return ((x+rocket_width > wall.x + 5) 
+		&& (x < wall.x + wall.w - 5) 
+		&& (y + rocket_height > wall.y + 5)
+		&& (y < wall.y + wall.h - 5));
+}
+
+bool check_game_won(double x, double y){
+	return ((x > window_width/2) && (y == window_height-rocket_height));
 }
 
 void detect_collision(double &x, double &y, SDL_Rect walls[], double &dx, double &dy, double &ddx, double &ddy, bool &game_active){
 		
 	// collision with window
-	if ((x > window_width-rocket_width) || (x < 0) || (y < 0)){
+	if ((x > window_width-rocket_width) || (x < 10) || (y < 0)){
 		game_active = false;
 	} else 
+
 	// landing
 	if(y > window_height-rocket_height) {
 		y = window_height-rocket_height;
-		
-		// landing failed
+	
+		// landing failed, too much speed
 		if(dy > 60){
 			game_active = false;
 		}
@@ -115,14 +161,16 @@ int main( ) { // int argc, char **argv ) {
 	double ddx = 0, ddy = 0;   // acceleration 
 	double dt = 1.0/120.0;     // time increase
 
-	double starting_fuel = 5;
+	double starting_fuel = 3;
 	double fuel = starting_fuel;
 
 	auto window = init_window(window_width, window_height);
 	auto renderer = init_renderer( window );
 	// load textures
 	auto game_texture = load_texture( renderer, "data/rocket.bmp" );
-	auto game_over_texture = load_texture( renderer, "data/explosion.bmp" );
+	auto explosion_texture = load_texture( renderer, "data/explosion.bmp" );
+	auto game_won_texture = load_texture( renderer, "data/game_won.bmp" );
+	auto game_over_texture = load_texture( renderer, "data/game_lose.bmp" );
 
 	// rectangle to display texture
 	SDL_Rect texr; 
@@ -132,6 +180,15 @@ int main( ) { // int argc, char **argv ) {
 	SDL_Rect explosion; 
 	explosion.w = 72; //texture width
 	explosion.h = 60; //texture height
+	
+	SDL_Rect game_status; 
+	game_status.w = 200; //texture width
+	game_status.h = 50; //texture height
+
+	SDL_Rect fuel_gauge; 
+	fuel_gauge.w = 10; 
+	fuel_gauge.x = 0;
+	fuel_gauge.y = 0;
 
 	// create some walls to hit
 	SDL_Rect wall; 
@@ -171,13 +228,21 @@ int main( ) { // int argc, char **argv ) {
 
 		SDL_RenderCopy( renderer.get(), game_texture.get(), NULL, &texr );
 
+		draw_fuel_gauge(renderer, fuel, starting_fuel, fuel_gauge);
 		// landing failed
 		if(!game_active){
-			draw_explosion(renderer, game_over_texture, explosion, x, y);
+			draw_explosion(renderer, explosion_texture, explosion, x, y);
+			draw_game_status(renderer, game_over_texture, game_status);
+		} else 
+		if(check_game_won(x,y)){
+			draw_game_status(renderer, game_won_texture, game_status);
+			game_active = false;
 		}
 
 		SDL_RenderPresent( renderer.get() );
 		
+		
+
 		// reset acceleration
 		ddx = 0;
 		ddy = 100;
@@ -203,9 +268,6 @@ int main( ) { // int argc, char **argv ) {
 		dy += ddy*dt;
 		x += dx*dt;
 		y += dy*dt;
-
-		std::cout << (fuel/starting_fuel)*100 << "%" <<"\n";
-		std::cout << "dy:" << dy <<"\n";
 
 		std::this_thread::sleep_for (std::chrono::milliseconds((int)(1000.0*dt)));
 	}
