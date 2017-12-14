@@ -152,11 +152,40 @@ void detect_collision(double &x, double &y, SDL_Rect walls[], double &dx, double
 	}
 }
 
+void calculate_steering(double &ddx, double &ddy, double &fuel, double dt){
+	
+	ddx = 0;
+	ddy = 100;
+	
+	const Uint8 *state = SDL_GetKeyboardState(NULL);
+	// every acceleration uses fuel
+	if (state[SDL_SCANCODE_UP] && fuel > 0) {
+		ddy = -150;
+		fuel -= dt;	
+	}
+	if (state[SDL_SCANCODE_LEFT] && ddy < 0) {
+		ddx = -75;
+	}
+	if (state[SDL_SCANCODE_RIGHT] && ddy < 0) {
+		ddx = 75;
+	}
+}
+
+void calculate_position(double &x, double &y, double &dx, double &dy, double ddx, double ddy, double dt){
+
+	x += dx*dt + 0.5*ddx*dt*dt;
+	y += dy*dt + 0.5*ddy*dt*dt;
+	dx *= 0.999; 
+	dx += ddx*dt;
+	dy += ddy*dt;
+	
+}
+
 
 
 int main( ) { // int argc, char **argv ) {
 
-	double x = 75, y = 352;    // starting position
+	double x = 75, y = window_height-rocket_height;    // starting position
 	double dx = 0, dy = 0;     // speed
 	double ddx = 0, ddy = 0;   // acceleration 
 	double dt = 1.0/120.0;     // time increase
@@ -205,8 +234,12 @@ int main( ) { // int argc, char **argv ) {
 
 	SDL_Rect walls [] = {wall, wall2};
 
+	auto current_time = std::chrono::system_clock::now();
+	auto new_time = current_time;
+
 	//game loop
 	for ( bool game_active = true ; game_active; ) {
+
 		SDL_Event event;
 		// someone closed window event
 		while ( SDL_PollEvent( &event ) ) {
@@ -226,9 +259,12 @@ int main( ) { // int argc, char **argv ) {
 		// draw some walls
 		draw_walls(renderer, walls);
 
+		// draw rocket
 		SDL_RenderCopy( renderer.get(), game_texture.get(), NULL, &texr );
 
+		//draw fuel gauge
 		draw_fuel_gauge(renderer, fuel, starting_fuel, fuel_gauge);
+
 		// landing failed
 		if(!game_active){
 			draw_explosion(renderer, explosion_texture, explosion, x, y);
@@ -240,36 +276,13 @@ int main( ) { // int argc, char **argv ) {
 		}
 
 		SDL_RenderPresent( renderer.get() );
-		
-		
-
-		// reset acceleration
-		ddx = 0;
-		ddy = 100;
 	
-		const Uint8 *state = SDL_GetKeyboardState(NULL);
-		// every acceleration uses fuel
-		if (state[SDL_SCANCODE_UP] && fuel > 0) {
-			ddy = -150;
-			fuel -= dt;
-			
-		}
-		if (state[SDL_SCANCODE_LEFT] && ddy < 0) {
-			ddx = -75;
-		}
-		if (state[SDL_SCANCODE_RIGHT] && ddy < 0) {
-			ddx = 75;
-		}
-		
-		// "wind drag"
-		dx *= 0.999; 
+		calculate_steering(ddx,ddy,fuel,dt);
+		calculate_position(x, y, dx, dy, ddx, ddy, dt);
 
-		dx += ddx*dt;
-		dy += ddy*dt;
-		x += dx*dt;
-		y += dy*dt;
-
-		std::this_thread::sleep_for (std::chrono::milliseconds((int)(1000.0*dt)));
+		new_time = current_time + std::chrono::milliseconds((int)(1000.0*dt));
+		std::this_thread::sleep_until (new_time);
+		current_time = new_time;
 	}
 
 	std::this_thread::sleep_for (std::chrono::milliseconds(10000));
