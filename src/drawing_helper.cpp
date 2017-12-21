@@ -52,7 +52,7 @@ void draw_walls(std::shared_ptr<SDL_Renderer> renderer, SDL_Rect walls[]){
 
 	SDL_SetRenderDrawColor(renderer.get(), 255, 255, 255, 255);
 
-	for( unsigned int i = 0; i < walls_number; i++ ){	
+	for( int i = 0; i < walls_number; i++ ){	
 		SDL_RenderFillRect( renderer.get(), &walls[i]);
 	}
 	
